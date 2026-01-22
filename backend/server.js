@@ -5,31 +5,30 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware - FIXED CORS configuration
+// Middleware - Updated for production
+const allowedOrigins = [
+    'http://localhost:5173', 
+    'http://localhost:5174', 
+    'http://localhost:3000',
+    'https://akova-job-portal.vercel.app',
+    'https://akovajobsportal.vercel.app'
+];
+
 app.use(cors({
-    origin: [
-        'http://localhost:5173', 
-        'http://localhost:5174', 
-        'http://localhost:3000', 
-        'https://akova-job-portal.vercel.app',
-        'https://akovajobsportal.vercel.app'
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
-// Handle preflight requests - FIXED: Don't use wildcard '*'
-app.options('*', (req, res) => {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.status(200).send();
-});
-
-// OR simpler alternative - remove the app.options line completely
-// The cors middleware already handles OPTIONS requests
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -40,20 +39,35 @@ app.use((req, res, next) => {
     next();
 });
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-})
+// MongoDB Connection - FIXED for Mongoose 7+
+mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
         console.log('✅ MongoDB Connected Successfully');
+        
+        // Optional: Log connection details
+        const db = mongoose.connection;
+        console.log(`📊 Database: ${db.name}`);
+        console.log(`🏠 Host: ${db.host}`);
+        console.log(`🔌 Port: ${db.port}`);
     })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.message);
+        console.error('❌ Full Error:', err);
         process.exit(1);
     });
+
+// Optional: Add MongoDB connection event listeners
+mongoose.connection.on('error', (err) => {
+    console.error('❌ MongoDB Connection Error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('⚠️ MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('✅ MongoDB reconnected');
+});
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -65,11 +79,24 @@ app.use('/api/jobs', jobRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+    const dbState = mongoose.connection.readyState;
+    const dbStatus = {
+        0: 'disconnected',
+        1: 'connected',
+        2: 'connecting',
+        3: 'disconnecting'
+    };
+    
     res.json({
         status: 'OK',
         message: 'Job Portal API is running',
         timestamp: new Date().toISOString(),
-        database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+        database: {
+            status: dbStatus[dbState] || 'unknown',
+            readyState: dbState
+        },
+        environment: process.env.NODE_ENV || 'development',
+        uptime: process.uptime()
     });
 });
 
@@ -78,50 +105,77 @@ app.get('/', (req, res) => {
     res.json({
         message: '🎯 Job Portal API',
         version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
         endpoints: {
             auth: '/api/auth',
             jobs: '/api/jobs',
             health: '/health'
-        }
+        },
+        documentation: 'Check /health for API status'
     });
 });
 
-// 404 handler - FIXED: Don't use app.options for wildcard
-app.use('*', (req, res, next) => {
+// 404 handler
+app.use((req, res, next) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found',
-        path: req.path
+        path: req.path,
+        method: req.method,
+        timestamp: new Date().toISOString()
     });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('❌ Server Error:', err.stack);
-    res.status(500).json({
+    
+    // Handle CORS errors
+    if (err.message.includes('CORS policy')) {
+        return res.status(403).json({
+            success: false,
+            error: 'CORS Error',
+            message: err.message
+        });
+    }
+    
+    res.status(err.status || 500).json({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'production' ? undefined : err.message
     });
 });
 
-// Start Server
+// Start Server - IMPORTANT for Render
 const PORT = process.env.PORT || 5000;
-const HOST = '0.0.0.0';
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+
+// Validate port
+if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
+    console.error('❌ Invalid PORT:', PORT);
+    process.exit(1);
+}
 
 const server = app.listen(PORT, HOST, () => {
     console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-    console.log(`🌐 API URL: http://${HOST}:${PORT}`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
+    console.log(`🗄️  MongoDB URI: ${process.env.MONGODB_URI ? 'Configured' : 'Not configured'}`);
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
+const shutdown = () => {
+    console.log('🛑 Shutdown signal received');
     server.close(() => {
-        console.log('HTTP server closed');
+        console.log('✅ HTTP server closed');
         mongoose.connection.close(false, () => {
-            console.log('MongoDB connection closed');
+            console.log('✅ MongoDB connection closed');
             process.exit(0);
         });
     });
-});
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+module.exports = app; // For testing purposes

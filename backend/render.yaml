@@ -2,12 +2,15 @@ services:
   - type: web
     name: akova-jobportal-backend
     runtime: node
+    plan: free
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: npm start
     envVars:
       - key: MONGODB_URI
         value: mongodb+srv://akovadev:Akova%402025@akova.glxh1wv.mongodb.net/jobportal?retryWrites=true&w=majority
       - key: JWT_SECRET
         value: Xupj1JAUQA1vPNcex4SDcOqqypZ6LlmX5UmwNpBkacY
-      - key: PORT
-        value: 10000
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
