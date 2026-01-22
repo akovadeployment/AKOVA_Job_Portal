@@ -122,6 +122,59 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /jobs/:identifier - Get single job (supports both ID and slug)
+router.get('/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    let job;
+    
+    // Check if identifier is a valid MongoDB ObjectId
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      // Try to find by ID first
+      job = await Job.findById(identifier).lean();
+    }
+    
+    // If not found by ID or not a valid ObjectId, try to find by slug
+    if (!job) {
+      job = await Job.findOne({ 
+        slug: identifier,
+        isActive: true 
+      }).lean();
+    }
+    
+    // If still not found, try to find by title slug
+    if (!job) {
+      // Convert the identifier to a regex pattern to match in title
+      const titlePattern = identifier.replace(/-/g, '[-\\s]');
+      job = await Job.findOne({
+        title: { $regex: new RegExp(titlePattern, 'i') },
+        isActive: true
+      }).lean();
+    }
+    
+    if (!job) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Job not found' 
+      });
+    }
+    
+    await Job.findByIdAndUpdate(job._id, { $inc: { views: 1 } });
+    
+    res.json({
+      success: true,
+      data: job
+    });
+  } catch (error) {
+    console.error('Error fetching job:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Server error while fetching job',
+      details: error.message 
+    });
+  }
+});
+
 // POST /jobs - Create new job (NO AUTH REQUIRED)
 router.post('/', async (req, res) => {
   try {

@@ -1,9 +1,7 @@
-// src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext'; // Now imports from .jsx file
+import { AuthProvider } from './context/AuthContext';
 import JobListings from './pages/JobListings';
-import JobDetails from './pages/JobDetails';
 import JobDetail from './pages/JobDetail';
 import HRDashboard from './pages/HRDashboard';
 import Login from './pages/Login';
@@ -25,7 +23,8 @@ function App() {
           <main className="flex-grow">
             <Routes>
               <Route path="/" element={<JobListings />} />
-              <Route path="/jobs/:id" element={<JobDetails />} />
+              {/* ADD THIS LINE - IT'S MISSING! */}
+              <Route path="/jobs/:id" element={<JobDetail />} />
               <Route path="/job/:id" element={<JobDetail />} />
               <Route path="/login" element={<Login />} />
               <Route 
