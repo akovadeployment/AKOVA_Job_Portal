@@ -1,4 +1,3 @@
-// pages/JobDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { jobAPI } from '../services/api';
@@ -28,6 +27,9 @@ const JobDetail = () => {
   const [relatedJobs, setRelatedJobs] = useState([]);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
+  // Use the actual job URL for sharing
+  const [currentJobUrl, setCurrentJobUrl] = useState('');
 
   useEffect(() => {
     fetchJobDetails();
@@ -40,6 +42,15 @@ const JobDetail = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [id]);
+
+  useEffect(() => {
+    // Set the current job URL whenever the job loads
+    if (job && id) {
+      const url = `${window.location.origin}/job/${id}`;
+      setCurrentJobUrl(url);
+      console.log('Current job URL for sharing:', url);
+    }
+  }, [job, id]);
 
   const fetchJobDetails = async () => {
     try {
@@ -86,23 +97,22 @@ const JobDetail = () => {
   };
 
   const copyShareableLink = () => {
-    if (job && job.shareableLink) {
-      const fullLink = `${window.location.origin}${job.shareableLink}`;
-      navigator.clipboard.writeText(fullLink)
+    if (currentJobUrl) {
+      navigator.clipboard.writeText(currentJobUrl)
         .then(() => {
-          alert('Link copied to clipboard!');
+          alert('Job link copied to clipboard!\n\n' + currentJobUrl);
         })
         .catch(err => {
           console.error('Failed to copy link:', err);
+          alert('Failed to copy link. Please try again.');
         });
     }
   };
 
   const getShareUrl = (platform) => {
-    if (!job || !job.shareableLink) return '';
+    if (!job || !currentJobUrl) return '';
     
-    const fullUrl = `${window.location.origin}${job.shareableLink}`;
-    const encodedUrl = encodeURIComponent(fullUrl);
+    const encodedUrl = encodeURIComponent(currentJobUrl);
     const text = encodeURIComponent(`Check out this job: ${job.title} at ${job.company || 'Our Company'}`);
     
     switch (platform) {
@@ -115,11 +125,11 @@ const JobDetail = () => {
       case 'whatsapp':
         return `https://wa.me/?text=${text}%20${encodedUrl}`;
       case 'email':
-        return `mailto:?subject=${encodeURIComponent(`Job Opportunity: ${job.title}`)}&body=${text}%0A%0A${fullUrl}`;
+        return `mailto:?subject=${encodeURIComponent(`Job Opportunity: ${job.title}`)}&body=${text}%0A%0A${currentJobUrl}`;
       case 'sms':
         return `sms:?body=${text}%20${encodedUrl}`;
       default:
-        return fullUrl;
+        return currentJobUrl;
     }
   };
 
@@ -193,7 +203,7 @@ const JobDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Share FAB */}
-      {isMobile && job.shareableLink && (
+      {isMobile && currentJobUrl && (
         <button
           onClick={() => setShowShareOptions(!showShareOptions)}
           className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
@@ -238,20 +248,6 @@ const JobDetail = () => {
                 <FaEnvelope className="w-8 h-8 text-red-600 mb-2" />
                 <span className="text-sm font-medium">Email</span>
               </button>
-              {/* <button
-                onClick={() => handleShare('twitter')}
-                className="flex flex-col items-center p-4 bg-blue-50 rounded-xl"
-              >
-                <FaTwitter className="w-8 h-8 text-blue-400 mb-2" />
-                <span className="text-sm font-medium">Twitter</span>
-              </button>
-              <button
-                onClick={() => handleShare('linkedin')}
-                className="flex flex-col items-center p-4 bg-blue-50 rounded-xl"
-              >
-                <FaLinkedin className="w-8 h-8 text-blue-700 mb-2" />
-                <span className="text-sm font-medium">LinkedIn</span>
-              </button> */}
               <button
                 onClick={copyShareableLink}
                 className="flex flex-col items-center p-4 bg-purple-50 rounded-xl"
@@ -334,25 +330,28 @@ const JobDetail = () => {
               </div>
 
               {/* Shareable Link Section - Desktop */}
-              {!isMobile && job.shareableLink && (
+              {!isMobile && currentJobUrl && (
                 <div className="hidden sm:flex flex-col gap-3 min-w-[280px]">
                   <div className="bg-white/10 rounded-lg p-4">
                     <p className="text-sm mb-2 font-medium">Shareable Link</p>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        value={`${window.location.origin}${job.shareableLink}`}
+                        value={currentJobUrl}
                         readOnly
                         className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded text-sm truncate"
                       />
                       <button
                         onClick={copyShareableLink}
                         className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded text-sm transition-colors whitespace-nowrap"
-                        title="Copy link to clipboard"
+                        title="Copy job link to clipboard"
                       >
                         <FaCopy />
                       </button>
                     </div>
+                    <p className="text-xs text-white/70 mt-2">
+                      Copy this link to share the job
+                    </p>
                   </div>
                   
                   {/* Desktop Share Buttons */}
@@ -369,18 +368,6 @@ const JobDetail = () => {
                       label="Email"
                       color="bg-red-600"
                     />
-                    {/* <ShareButton
-                      platform="twitter"
-                      icon={FaTwitter}
-                      label="Twitter"
-                      color="bg-blue-400"
-                    />
-                    <ShareButton
-                      platform="linkedin"
-                      icon={FaLinkedin}
-                      label="LinkedIn"
-                      color="bg-blue-700"
-                    /> */}
                   </div>
                 </div>
               )}
@@ -515,14 +502,23 @@ const JobDetail = () => {
                           <FaSms className="w-4 h-4" />
                           <span className="text-sm">SMS</span>
                         </button>
-                        {/* <button
-                          onClick={() => handleShare('facebook')}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 transition-colors"
+                        <button
+                          onClick={() => handleShare('whatsapp')}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
                         >
-                          <FaFacebook className="w-4 h-4" />
-                          <span className="text-sm">Facebook</span>
-                        </button> */}
+                          <FaWhatsapp className="w-4 h-4" />
+                          <span className="text-sm">WhatsApp</span>
+                        </button>
                       </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-2">Job URL</p>
+                      <div className="text-xs bg-gray-50 p-2 rounded border border-gray-200 truncate">
+                        {currentJobUrl}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This is the direct link to this job
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -554,22 +550,27 @@ const JobDetail = () => {
           </div>
 
           {/* Mobile Link Copy Section */}
-          {isMobile && job.shareableLink && (
+          {isMobile && currentJobUrl && (
             <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Shareable Link</h3>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={`${window.location.origin}${job.shareableLink}`}
-                  readOnly
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 truncate"
-                />
-                <button
-                  onClick={copyShareableLink}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
-                >
-                  Copy
-                </button>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-500 mb-2">Direct job link:</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={currentJobUrl}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 truncate"
+                    />
+                    <button
+                      onClick={copyShareableLink}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
