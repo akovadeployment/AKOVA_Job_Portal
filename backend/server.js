@@ -5,13 +5,32 @@ require('dotenv').config();
 
 const app = express();
 
-// Update CORS settings - FIXED: Added PATCH method
+// Middleware - FIXED CORS configuration
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'https://akovajobsportal.vercel.app'],
+    origin: [
+        'http://localhost:5173', 
+        'http://localhost:5174', 
+        'http://localhost:3000', 
+        'https://akova-job-portal.vercel.app',
+        'https://akovajobsportal.vercel.app'
+    ],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Added PATCH
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
+
+// Handle preflight requests - FIXED: Don't use wildcard '*'
+app.options('*', (req, res) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.status(200).send();
+});
+
+// OR simpler alternative - remove the app.options line completely
+// The cors middleware already handles OPTIONS requests
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,15 +44,14 @@ app.use((req, res, next) => {
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000, // 30 seconds
-    socketTimeoutMS: 45000, // 45 seconds
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
 })
     .then(() => {
         console.log('✅ MongoDB Connected Successfully');
     })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.message);
-        console.error('❌ Full Error:', err);
         process.exit(1);
     });
 
@@ -68,10 +86,8 @@ app.get('/', (req, res) => {
     });
 });
 
-app.options('*', cors());
-
-// 404 handler
-app.use((req, res, next) => {
+// 404 handler - FIXED: Don't use app.options for wildcard
+app.use('*', (req, res, next) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found',
@@ -91,11 +107,11 @@ app.use((err, req, res, next) => {
 // Start Server
 const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
-const server = app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🌐 API URL: http://localhost:${PORT}`);
+
+const server = app.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running on http://${HOST}:${PORT}`);
     console.log(`🌐 API URL: http://${HOST}:${PORT}`);
-    console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
+    console.log(`🔗 Health Check: http://${HOST}:${PORT}/health`);
 });
 
 // Graceful shutdown
