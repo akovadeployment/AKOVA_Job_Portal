@@ -5,10 +5,9 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
 // Update CORS settings - FIXED: Added PATCH method
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'https://akovajobsportal.vercel.app'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Added PATCH
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -23,12 +22,18 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000, // 30 seconds
+    socketTimeoutMS: 45000, // 45 seconds
+})
     .then(() => {
         console.log('✅ MongoDB Connected Successfully');
     })
     .catch(err => {
         console.error('❌ MongoDB Connection Error:', err.message);
+        console.error('❌ Full Error:', err);
         process.exit(1);
     });
 
@@ -63,6 +68,8 @@ app.get('/', (req, res) => {
     });
 });
 
+app.options('*', cors());
+
 // 404 handler
 app.use((req, res, next) => {
     res.status(404).json({
@@ -83,9 +90,11 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌐 API URL: http://localhost:${PORT}`);
+    console.log(`🌐 API URL: http://${HOST}:${PORT}`);
     console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
 });
 
